@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>About Fitheos</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .nav-container {
+      backdrop-filter: blur(20px);
+      background: rgba(255, 255, 255, 0.1);
+    }
+    #sideMenu {
+      transform: translateX(100%);
+    }
+  </style>
+</head>
+<body class="overflow-x-hidden leading-8">
+  <header class="fixed top-0 w-full z-50 bg-[#0f172a]/90 backdrop-blur-md transition-all duration-300">
+    <nav class="w-full px-5 lg:px-8 xl:px-[8%] py-4 flex items-center justify-between mx-auto">
+      <a href="index2.html" class="logo text-2xl font-bold text-white">Fitheos</a>
+      
+      <!-- Desktop Navigation -->
+      <div class="hidden md:flex items-center gap-6 lg:gap-8 rounded-full px-8 py-2 transition-all duration-300 nav-container">
+        <ul class="flex items-center gap-6 lg:gap-8">
+          <li><a href="index2.html" class="text-white font-medium hover:text-green-400 transition-colors">Home</a></li>
+          <li><a href="#mission" class="text-white font-medium hover:text-green-400 transition-colors">Mission</a></li>
+          <li><a href="#team" class="text-white font-medium hover:text-green-400 transition-colors">Team</a></li>
+          <li><a href="#contact" class="text-white font-medium hover:text-green-400 transition-colors">Contact</a></li>
+        </ul>
+      </div>
+      
+      <!-- Mobile Menu Button -->
+      <button class="block md:hidden z-50" onclick="openMenu()">
+        <img src="menu-icon.png" alt="Menu" class="w-6 invert" />
+      </button>
+      
+      <!-- Mobile Menu -->
+      <div id="sideMenu" class="fixed top-0 right-0 w-64 h-screen transform translate-x-full transition duration-300 ease-in-out z-50 bg-[#0f172a]/95 backdrop-blur-xl">
+        <div class="absolute top-6 right-6" onclick="closeMenu()">
+          <img src="close-icon.png" alt="Close" class="w-6 cursor-pointer invert" />
+        </div>
+        <ul class="flex flex-col gap-6 py-20 px-10 text-white">
+          <li><a href="index2.html" onclick="closeMenu()" class="hover:text-green-400 transition-colors">Home</a></li>
+          <li><a href="#mission" onclick="closeMenu()" class="hover:text-green-400 transition-colors">Mission</a></li>
+          <li><a href="#team" onclick="closeMenu()" class="hover:text-green-400 transition-colors">Team</a></li>
+          <li><a href="#contact" onclick="closeMenu()" class="hover:text-green-400 transition-colors">Contact</a></li>
+        </ul>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Mission Section -->
+  <section id="mission" class="hero flex flex-col items-center justify-center min-h-screen pt-20 px-8">
+    <div class="max-w-4xl mx-auto text-center">
+      <h1 class="text-3xl sm:text-4xl font-bold mb-6">
+        Our Mission: <strong class="text-green-400">AI-Powered Fitness Evolution</strong>
+      </h1>
+      <p class="mb-6 text-lg opacity-90">
+        Combining cutting-edge computer vision with expert fitness knowledge to deliver real-time form correction 
+        and personalized training programs tailored to your unique physiology.
+      </p>
+      <div class="grid md:grid-cols-2 gap-8 mt-12">
+        <div class="feature bg-gray-900 bg-opacity-10 p-6 rounded-xl">
+          <h3 class="text-xl font-semibold mb-4">🏋️ Real-Time Analysis</h3>
+          <p>14 body points tracking for 50+ exercises</p>
+        </div>
+        <div class="feature bg-gray-900 bg-opacity-10 p-6 rounded-xl">
+          <h3 class="text-xl font-semibold mb-4">📊 Adaptive Learning</h3>
+          <p>Workout plans that evolve with your progress</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Team Section -->
+  <section id="team" class="py-16 px-4 sm:px-5">
+    <div class="max-w-6xl mx-auto text-center">
+      <h2 class="text-3xl font-bold mb-12">Our Expert Team</h2>
+      <div class="grid md:grid-cols-3 gap-8">
+        <div class="bg-gray-900 bg-opacity-10 p-6 rounded-xl">
+          <img src="assets/Ashmit_photo-modified.png" alt="Team Member" class="w-32 h-32 rounded-full object-cover mx-auto mb-4 border-4 border-white shadow-lg" />
+          <h3 class="text-xl font-semibold">AI Engineers</h3>
+          <p class="opacity-90">TensorFlow & OpenCV Specialists</p>
+        </div>
+        <div class="bg-gray-900 bg-opacity-10 p-6 rounded-xl">
+          <img src="assets/FE_1-modified.png" alt="Team Member" class="w-32 h-32 rounded-full object-cover mx-auto mb-4 border-4 border-white shadow-lg" />
+          <h3 class="text-xl font-semibold">Fitness Experts</h3>
+          <p class="opacity-90">Certified Trainers & Physiotherapists</p>
+        </div>
+        <div class="bg-gray-900 bg-opacity-10 p-6 rounded-xl">
+          <img src="assets/profile-img.png" alt="Team Member" class="w-32 h-32 rounded-full object-cover mx-auto mb-4 border-4 border-white shadow-lg" />
+          <h3 class="text-xl font-semibold">Nutritionists</h3>
+          <p class="opacity-90">Diet Planning & Macro Management</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact Section -->
+  <section id="contact" class="py-16 px-4 bg-tranparent">
+    <div class="max-w-4xl mx-auto text-center">
+      <h2 class="text-3xl font-bold mb-8">Get in Touch</h2>
+      <div class="bg-gray-900 bg-opacity-10 p-8 rounded-xl">
+        <p class="mb-4 text-lg">📧 contact@Fitheos.com</p>
+        <p class="text-lg">📞 +91 12345 67890</p>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    // Same scroll and menu functions as index.html
+    window.addEventListener("scroll", function () {
+      const header = document.querySelector("header");
+      if (window.scrollY > 50) {
+        header.classList.add("header-scrolled");
+      } else {
+        header.classList.remove("header-scrolled");
+      }
+    });
+
+    function openMenu() {
+      document.getElementById('sideMenu').classList.remove('translate-x-full');
+    }
+    function closeMenu() {
+      document.getElementById('sideMenu').classList.add('translate-x-full');
+    }
+  </script>
+</body>
+</html>

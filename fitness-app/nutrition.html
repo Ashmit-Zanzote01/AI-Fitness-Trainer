@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Nutrition Planner | Fitheos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle at bottom, #3c4da8, #a84493, #2c1045, #0c132d 75%);
+      color: white;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      overflow-x: hidden;
+    }
+  </style>
+</head>
+<body>
+    <header class="fixed top-0 w-full z-50 bg-[#0f172a]/90 backdrop-blur-md transition-all duration-300">
+        <nav class="w-full px-5 lg:px-8 xl:px-[8%] py-4 grid grid-cols-3 items-center mx-auto">
+          
+          <!-- Left: Logo -->
+          <a href="index2.html" class="logo text-2xl font-bold text-white">Fitheos</a>
+          
+          <!-- Center: Nav Links -->
+          <div class="hidden md:flex justify-center items-center gap-6 lg:gap-8 col-start-2">
+            <ul class="flex items-center gap-6 lg:gap-8">
+              <li><a href="index2.html" class="text-white font-medium hover:text-green-400 transition-colors">Home</a></li>
+              <li><a href="features.html" class="text-white font-medium hover:text-green-400 transition-colors">Features</a></li>
+              <li><a href="nutrition.html" class="text-green-400 font-semibold">Nutrition</a></li>
+              <li><a href="contact.html" class="text-white font-medium hover:text-green-400 transition-colors">Contact</a></li>
+            </ul>
+          </div>
+      
+          <!-- Right: Burger Icon -->
+          <button class="block md:hidden justify-self-end z-50" onclick="openMenu()">
+            <img src="menu-icon.png" alt="Menu" class="w-6 invert" />
+          </button>
+      
+          <!-- Sidebar Nav for Mobile -->
+          <div id="sideMenu" class="fixed top-0 right-0 w-64 h-screen transform translate-x-full transition duration-300 ease-in-out z-50 bg-[#0f172a]/95 backdrop-blur-xl">
+            <div class="absolute top-6 right-6" onclick="closeMenu()">
+              <img src="close-icon.png" alt="Close" class="w-6 cursor-pointer invert" />
+            </div>
+            <ul class="flex flex-col gap-6 py-20 px-10 text-white">
+              <li><a href="index2.html" onclick="closeMenu()" class="hover:text-green-400 transition-colors">Home</a></li>
+              <li><a href="features.html" onclick="closeMenu()" class="hover:text-green-400 transition-colors">Features</a></li>
+              <li><a href="nutrition.html" onclick="closeMenu()" class="text-green-400 font-semibold">Nutrition</a></li>
+              <li><a href="contact.html" onclick="closeMenu()" class="hover:text-green-400 transition-colors">Contact</a></li>
+            </ul>
+          </div>
+        </nav>
+      </header>
+      
+
+  <main class="pt-24 px-6 flex flex-col items-center justify-center">
+    <h2 class="text-3xl font-bold mb-6 text-center">Generate Your Personalized Meal Plan</h2>
+    
+    <!-- Form Container -->
+    <div class="bg-[#0f172a]/80 backdrop-blur-lg p-8 rounded-2xl w-full max-w-md shadow-2xl">
+      <form id="mealPlanForm">
+        <div class="mb-4">
+          <label for="goal" class="block mb-1 text-sm">Your Goal</label>
+          <select id="goal" name="goal" class="w-full px-4 py-2 rounded bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-green-400">
+            <option value="muscle_gain">Muscle Gain</option>
+            <option value="fat_loss">Fat Loss</option>
+            <option value="bulking">Bulking</option>
+          </select>
+        </div>
+
+        <div class="mb-4">
+          <label for="dailyCalories" class="block mb-1 text-sm">Daily Calorie Requirement</label>
+          <input type="number" id="dailyCalories" name="dailyCalories" class="w-full px-4 py-2 rounded bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-green-400" required>
+        </div>
+
+        <div class="mb-6">
+          <label for="mealsPerDay" class="block mb-1 text-sm">Meals Per Day</label>
+          <input type="number" id="mealsPerDay" name="mealsPerDay" class="w-full px-4 py-2 rounded bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-green-400" required>
+        </div>
+
+        <button type="submit" class="w-full bg-gradient-to-r from-green-400 to-blue-500 py-2 rounded font-semibold text-white hover:opacity-90 transition-all">
+          Generate Meal Plan
+        </button>
+      </form>
+    </div>
+
+    <!-- Section to display meal plan results -->
+    <div id="mealPlanResult" class="mt-8 w-full max-w-4xl"></div>
+  </main>
+
+  <script>
+    document.getElementById('mealPlanForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const goal = document.getElementById('goal').value;
+      const dailyCalories = document.getElementById('dailyCalories').value;
+      const mealsPerDay = document.getElementById('mealsPerDay').value;
+
+      // Show loading message
+      document.getElementById('mealPlanResult').innerHTML = `
+        <div class="text-center text-lg text-yellow-300 animate-pulse">
+          Generating your meal plan... 🍽️
+        </div>
+      `;
+
+      try {
+        const response = await fetch('http://127.0.0.1:5000/generate_meal_plan', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            goal: goal,
+            dailyCalories: dailyCalories,
+            mealsPerDay: mealsPerDay
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+          const plan = result.meal_plan;
+
+          let planHtml = `
+            <div class="bg-gray-800 p-6 rounded-xl">
+              <h3 class="text-xl font-bold mb-4 text-green-400">Your Meal Plan</h3>
+              <p><strong>Goal:</strong> ${goal}</p>
+              <p><strong>Daily Calories:</strong> ${dailyCalories}</p>
+              <p><strong>Meals per Day:</strong> ${mealsPerDay}</p>
+              <div class="mt-4 space-y-4">
+          `;
+
+          plan.forEach((meal, index) => {
+            planHtml += `
+              <div class="bg-gray-700 p-4 rounded-xl">
+                <h4 class="text-lg font-semibold">${meal.meal_name}</h4>
+                <ul class="list-disc list-inside text-sm text-gray-300">
+                  ${meal.items.map(item => `<li>${item.food_name} (${item.serving_size_g}g) - ${item.calories} kcal</li>`).join('')}
+                </ul>
+                <div class="mt-2 text-xs text-gray-400">
+                  <p>Total: ${meal.total_calories} kcal | Protein: ${meal.total_protein}g | Carbs: ${meal.total_carbs}g | Fats: ${meal.total_fats}g</p>
+                </div>
+              </div>
+            `;
+          });
+
+          planHtml += `</div></div>`;
+          document.getElementById('mealPlanResult').innerHTML = planHtml;
+
+        } else {
+          throw new Error(result.message || 'Something went wrong');
+        }
+      } catch (err) {
+        document.getElementById('mealPlanResult').innerHTML = `
+          <div class="bg-red-800 text-white p-4 rounded-xl mt-4">
+            ❌ Error: ${err.message}
+          </div>
+        `;
+      }
+    });
+  </script>
+</body>
+</html>

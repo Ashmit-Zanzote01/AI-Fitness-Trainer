@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Live Exercise Detection | Fitheos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle, #3c4da8, #2c1045, #0c132d 75%);
+      color: white;
+      min-height: 100%;
+      overflow-x: hidden;
+    }
+    .feedback-item { transition: all 0.3s ease; animation: fadeIn 0.5s; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .exercise-counter { text-shadow: 0 0 10px rgba(0,0,0,0.5); }
+    .form-score-meter { transition: width 0.5s ease; }
+    .pose-line {
+      stroke-width: 4px;
+      stroke: #00ff00;
+    }
+    .pose-line-ideal {
+      stroke-width: 3px;
+      stroke: #00ccff;
+      stroke-dasharray: 5, 5;
+      opacity: 0.7;
+    }
+    .angle-diff-good { color: #00ff00; }
+    .angle-diff-warning { color: #ffcc00; }
+    .angle-diff-bad { color: #ff3300; }
+    .exercise-type-badge {
+      position: absolute;
+      top: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 4px 12px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 20px;
+      font-weight: bold;
+      animation: badgePulse 1s;
+    }
+    @keyframes badgePulse {
+      0% { transform: translateX(-50%) scale(0.8); opacity: 0; }
+      50% { transform: translateX(-50%) scale(1.1); opacity: 1; }
+      100% { transform: translateX(-50%) scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body class="text-white">
+  <header class="fixed top-0 w-full z-50 bg-[#0f172a]/90 backdrop-blur-md py-4 px-8 flex justify-between items-center">
+    <h1 class="text-2xl font-bold">Fitheos - Live Trainer</h1>
+    <a href="index.html" class="text-green-400 hover:underline">← Back to Home</a>
+  </header>
+
+  <main class="pt-24 px-6 flex flex-col items-center justify-center min-h-screen">
+    <h2 class="text-3xl font-semibold mb-6">Live Pose Detection</h2>
+    
+    <div class="w-full max-w-4xl aspect-video bg-gray-800 rounded-xl overflow-hidden shadow-lg relative">
+      <video autoplay id="videoElement" class="w-full h-full object-cover"></video>
+      <canvas id="poseOverlay" class="absolute top-0 left-0 w-full h-full"></canvas>
+      
+      <div id="exercise-type-badge" class="exercise-type-badge hidden">
+        Detecting...
+      </div>
+      
+      <div class="absolute top-0 left-0 p-4 bg-black/40 backdrop-blur-sm rounded-br-lg">
+        <h3 id="exercise-type" class="text-xl font-bold mb-2">Detecting exercise...</h3>
+        <div class="flex items-center mb-2">
+          <span class="mr-2">Form Score:</span>
+          <div class="w-32 h-4 bg-gray-700 rounded-full overflow-hidden">
+            <div id="form-score-meter" class="form-score-meter h-full bg-green-500 rounded-full" style="width: 0%"></div>
+          </div>
+          <span id="form-score" class="ml-2">0%</span>
+        </div>
+      </div>
+      
+      <div id="rep-counter" class="hidden absolute top-4 right-4 text-4xl font-bold exercise-counter bg-black/30 backdrop-blur-sm p-4 rounded-lg">
+        0
+      </div>
+      
+      <div id="feedback-container" class="absolute bottom-0 left-0 right-0 p-4 bg-black/40 backdrop-blur-sm">
+        <div id="feedback-messages" class="flex flex-col gap-2"></div>
+      </div>
+      
+      <div id="angle-comparison" class="absolute top-16 left-4 p-3 bg-black/30 backdrop-blur-sm rounded-lg hidden">
+        <h4 class="text-sm mb-2 font-bold">Current vs Ideal Angles:</h4>
+        <div id="angle-comparison-content" class="text-xs space-y-1"></div>
+      </div>
+    </div>
+
+    <p id="status" class="mt-6 text-green-400 font-medium">Initializing camera...</p>
+    
+    <div class="mt-8 flex gap-4">
+      <button id="start-button" class="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition" disabled>
+        Start Analysis
+      </button>
+      <button id="stop-button" class="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition" disabled>
+        Stop
+      </button>
+      <button id="show-ideal" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition">
+        Show Ideal Form
+      </button>
+    </div>
+  </main>
+
+  <script>
+    const video = document.querySelector("#videoElement");
+    const statusText = document.getElementById("status");
+    const startButton = document.getElementById("start-button");
+    const stopButton = document.getElementById("stop-button");
+    const showIdealButton = document.getElementById("show-ideal");
+    const exerciseType = document.getElementById("exercise-type");
+    const exerciseBadge = document.getElementById("exercise-type-badge");
+    const formScore = document.getElementById("form-score");
+    const formScoreMeter = document.getElementById("form-score-meter");
+    const repCounter = document.getElementById("rep-counter");
+    const feedbackMessages = document.getElementById("feedback-messages");
+    const poseCanvas = document.getElementById("poseOverlay");
+    const poseCtx = poseCanvas.getContext('2d');
+    const angleComparison = document.getElementById("angle-comparison")
+    angleComparison.style.cssText = "top: 120px; left: 4px; padding: 3px; background-color: rgba(0,0,0,0.3); backdrop-filter: blur(3px); border-radius: 8px;";
+    const angleComparisonContent = document.getElementById("angle-comparison-content");
+    
+    let isAnalyzing = false;
+    let stream = null;
+    let analysisInterval = null;
+    let lastCounter = 0;
+    let lastExerciseType = "";
+    let showIdealForm = false;
+    let pendingRequest = false;
+    
+    // Define ideal angles for each exercise stage
+    const idealAngles = {
+      push_up: {
+        up: { LEFT_ELBOW: 170, RIGHT_ELBOW: 170, LEFT_KNEE: 175, RIGHT_KNEE: 175 },
+        down: { LEFT_ELBOW: 90, RIGHT_ELBOW: 90, LEFT_KNEE: 175, RIGHT_KNEE: 175 }
+      },
+      squat: {
+        up: { LEFT_KNEE: 170, RIGHT_KNEE: 170, LEFT_HIP: 165, RIGHT_HIP: 165 },
+        down: { LEFT_KNEE: 100, RIGHT_KNEE: 100, LEFT_HIP: 120, RIGHT_HIP: 120 }
+      },
+      bicep_curl: {
+        up: { LEFT_ELBOW: 45, RIGHT_ELBOW: 45, LEFT_SHOULDER: 30, RIGHT_SHOULDER: 30 },
+        down: { LEFT_ELBOW: 165, RIGHT_ELBOW: 165, LEFT_SHOULDER: 10, RIGHT_SHOULDER: 10 }
+      },
+      shoulder_press: {
+        up: { LEFT_ELBOW: 170, RIGHT_ELBOW: 170, LEFT_SHOULDER: 140, RIGHT_SHOULDER: 140 },
+        down: { LEFT_ELBOW: 90, RIGHT_ELBOW: 90, LEFT_SHOULDER: 90, RIGHT_SHOULDER: 90 }
+      }
+    };
+    
+    // Define ideal landmarks for a reference skeleton
+    const idealLandmarks = {
+      push_up: {
+        up: {
+          LEFT_SHOULDER: { x: 0.3, y: 0.2 }, RIGHT_SHOULDER: { x: 0.7, y: 0.2 },
+          LEFT_ELBOW: { x: 0.2, y: 0.35 }, RIGHT_ELBOW: { x: 0.8, y: 0.35 },
+          LEFT_WRIST: { x: 0.1, y: 0.45 }, RIGHT_WRIST: { x: 0.9, y: 0.45 },
+          LEFT_HIP: { x: 0.35, y: 0.5 }, RIGHT_HIP: { x: 0.65, y: 0.5 },
+          LEFT_KNEE: { x: 0.35, y: 0.7 }, RIGHT_KNEE: { x: 0.65, y: 0.7 },
+          LEFT_ANKLE: { x: 0.35, y: 0.85 }, RIGHT_ANKLE: { x: 0.65, y: 0.85 }
+        },
+        down: {
+          LEFT_SHOULDER: { x: 0.3, y: 0.35 }, RIGHT_SHOULDER: { x: 0.7, y: 0.35 },
+          LEFT_ELBOW: { x: 0.2, y: 0.5 }, RIGHT_ELBOW: { x: 0.8, y: 0.5 },
+          LEFT_WRIST: { x: 0.1, y: 0.5 }, RIGHT_WRIST: { x: 0.9, y: 0.5 },
+          LEFT_HIP: { x: 0.35, y: 0.5 }, RIGHT_HIP: { x: 0.65, y: 0.5 },
+          LEFT_KNEE: { x: 0.35, y: 0.7 }, RIGHT_KNEE: { x: 0.65, y: 0.7 },
+          LEFT_ANKLE: { x: 0.35, y: 0.85 }, RIGHT_ANKLE: { x: 0.65, y: 0.85 }
+        }
+      },
+      squat: {
+        up: {
+          LEFT_SHOULDER: { x: 0.35, y: 0.2 }, RIGHT_SHOULDER: { x: 0.65, y: 0.2 },
+          LEFT_ELBOW: { x: 0.25, y: 0.35 }, RIGHT_ELBOW: { x: 0.75, y: 0.35 },
+          LEFT_WRIST: { x: 0.15, y: 0.5 }, RIGHT_WRIST: { x: 0.85, y: 0.5 },
+          LEFT_HIP: { x: 0.4, y: 0.45 }, RIGHT_HIP: { x: 0.6, y: 0.45 },
+          LEFT_KNEE: { x: 0.35, y: 0.65 }, RIGHT_KNEE: { x: 0.65, y: 0.65 },
+          LEFT_ANKLE: { x: 0.3, y: 0.85 }, RIGHT_ANKLE: { x: 0.7, y: 0.85 }
+        },
+        down: {
+          LEFT_SHOULDER: { x: 0.35, y: 0.3 }, RIGHT_SHOULDER: { x: 0.65, y: 0.3 },
+          LEFT_ELBOW: { x: 0.25, y: 0.45 }, RIGHT_ELBOW: { x: 0.75, y: 0.45 },
+          LEFT_WRIST: { x: 0.15, y: 0.6 }, RIGHT_WRIST: { x: 0.85, y: 0.6 },
+          LEFT_HIP: { x: 0.4, y: 0.55 }, RIGHT_HIP: { x: 0.6, y: 0.55 },
+          LEFT_KNEE: { x: 0.35, y: 0.7 }, RIGHT_KNEE: { x: 0.65, y: 0.7 },
+          LEFT_ANKLE: { x: 0.3, y: 0.85 }, RIGHT_ANKLE: { x: 0.7, y: 0.85 }
+        }
+      },
+      bicep_curl: {
+        down: {
+          LEFT_SHOULDER: { x: 0.35, y: 0.25 }, RIGHT_SHOULDER: { x: 0.65, y: 0.25 },
+          LEFT_ELBOW: { x: 0.25, y: 0.45 }, RIGHT_ELBOW: { x: 0.75, y: 0.45 },
+          LEFT_WRIST: { x: 0.2, y: 0.7 }, RIGHT_WRIST: { x: 0.8, y: 0.7 },
+          LEFT_HIP: { x: 0.4, y: 0.55 }, RIGHT_HIP: { x: 0.6, y: 0.55 },
+          LEFT_KNEE: { x: 0.35, y: 0.75 }, RIGHT_KNEE: { x: 0.65, y: 0.75 },
+          LEFT_ANKLE: { x: 0.3, y: 0.9 }, RIGHT_ANKLE: { x: 0.7, y: 0.9 }
+        },
+        up: {
+          LEFT_SHOULDER: { x: 0.35, y: 0.25 }, RIGHT_SHOULDER: { x: 0.65, y: 0.25 },
+          LEFT_ELBOW: { x: 0.25, y: 0.45 }, RIGHT_ELBOW: { x: 0.75, y: 0.45 },
+          LEFT_WRIST: { x: 0.15, y: 0.3 }, RIGHT_WRIST: { x: 0.85, y: 0.3 },
+          LEFT_HIP: { x: 0.4, y: 0.55 }, RIGHT_HIP: { x: 0.6, y: 0.55 },
+          LEFT_KNEE: { x: 0.35, y: 0.75 }, RIGHT_KNEE: { x: 0.65, y: 0.75 },
+          LEFT_ANKLE: { x: 0.3, y: 0.9 }, RIGHT_ANKLE: { x: 0.7, y: 0.9 }
+        }
+      },
+      shoulder_press: {
+        down: {
+          LEFT_SHOULDER: { x: 0.35, y: 0.25 }, RIGHT_SHOULDER: { x: 0.65, y: 0.25 },
+          LEFT_ELBOW: { x: 0.25, y: 0.4 }, RIGHT_ELBOW: { x: 0.75, y: 0.4 },
+          LEFT_WRIST: { x: 0.15, y: 0.55 }, RIGHT_WRIST: { x: 0.85, y: 0.55 },
+          LEFT_HIP: { x: 0.4, y: 0.55 }, RIGHT_HIP: { x: 0.6, y: 0.55 },
+          LEFT_KNEE: { x: 0.35, y: 0.75 }, RIGHT_KNEE: { x: 0.65, y: 0.75 },
+          LEFT_ANKLE: { x: 0.3, y: 0.9 }, RIGHT_ANKLE: { x: 0.7, y: 0.9 }
+        },
+        up: {
+          LEFT_SHOULDER: { x: 0.35, y: 0.25 }, RIGHT_SHOULDER: { x: 0.65, y: 0.25 },
+          LEFT_ELBOW: { x: 0.3, y: 0.15 }, RIGHT_ELBOW: { x: 0.7, y: 0.15 },
+          LEFT_WRIST: { x: 0.35, y: 0.05 }, RIGHT_WRIST: { x: 0.65, y: 0.05 },
+          LEFT_HIP: { x: 0.4, y: 0.55 }, RIGHT_HIP: { x: 0.6, y: 0.55 },
+          LEFT_KNEE: { x: 0.35, y: 0.75 }, RIGHT_KNEE: { x: 0.65, y: 0.75 },
+          LEFT_ANKLE: { x: 0.3, y: 0.9 }, RIGHT_ANKLE: { x: 0.7, y: 0.9 }
+        }
+      }
+    };
+
+    // Get joint name mapping for frontend display
+    const jointNameMapping = {
+      LEFT_ELBOW: "Left Elbow",
+      RIGHT_ELBOW: "Right Elbow",
+      LEFT_KNEE: "Left Knee",
+      RIGHT_KNEE: "Right Knee",
+      LEFT_SHOULDER: "Left Shoulder",
+      RIGHT_SHOULDER: "Right Shoulder",
+      LEFT_HIP: "Left Hip",
+      RIGHT_HIP: "Right Hip"
+    };
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(mediaStream => {
+        stream = mediaStream;
+        video.srcObject = stream;
+        video.style.transform = "scaleX(-1)";  // Mirror video feed
+        poseCanvas.style.transform = "scaleX(-1)";  // Mirror skeleton overlay
+        video.onloadedmetadata = () => {
+          statusText.textContent = "Camera ready. Click 'Start Analysis' to begin.";
+          startButton.disabled = false;
+          poseCanvas.width = video.videoWidth;
+          poseCanvas.height = video.videoHeight;
+        };
+      })
+      .catch(err => {
+        console.error(err);
+        statusText.textContent = "Camera access denied!";
+        startButton.disabled = true;
+      });
+
+      startButton.addEventListener("click", () => {
+        if (!stream) return;
+
+        // Reset the backend processor state first
+        fetch('http://127.0.0.1:5000/reset_processor', { method: 'POST' })
+          .catch(err => console.error("Failed to reset processor:", err))
+          .finally(() => {
+            isAnalyzing = true;
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            statusText.textContent = "Analyzing your form...";
+            repCounter.classList.remove("hidden");
+            startAnalysis();
+          });
+      });
+
+    stopButton.addEventListener("click", () => {
+      isAnalyzing = false;
+      startButton.disabled = false;
+      stopButton.disabled = true;
+      statusText.textContent = "Analysis stopped. Click 'Start Analysis' to begin again.";
+      clearInterval(analysisInterval);
+      poseCtx.clearRect(0, 0, poseCanvas.width, poseCanvas.height);
+      angleComparison.classList.add("hidden");
+      exerciseBadge.classList.add("hidden");
+    });
+    
+    showIdealButton.addEventListener("click", () => {
+      showIdealForm = !showIdealForm;
+      showIdealButton.textContent = showIdealForm ? "Hide Ideal Form" : "Show Ideal Form";
+      angleComparison.classList.toggle("hidden", !showIdealForm);
+    });
+
+    function startAnalysis() {
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+
+      analysisInterval = setInterval(() => {
+        if (!isAnalyzing || pendingRequest) return;
+
+        const width = video.videoWidth;
+        const height = video.videoHeight;
+        if (!width || !height) return;
+
+        // Reduce resolution for better performance
+        const scale = 1.0; // Use full resolution
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const frameData = canvas.toDataURL('image/jpeg', 0.8);
+        pendingRequest = true;
+        
+        fetch('http://127.0.0.1:5000/classify_exercise', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ frame: frameData })
+        })
+        .then(async response => {
+          pendingRequest = false;
+          const contentType = response.headers.get('content-type');
+          if (!contentType?.includes('application/json')) {
+            const text = await response.text();
+            throw new Error(`Server returned unexpected format: ${text.slice(0, 100)}`);
+          }
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Unknown server error');
+          }
+          return response.json();
+        })
+        .then(({ result }) => {
+          onNewResult(result);
+          if (result.landmarks && result.angles) {
+            drawAnglesAndLandmarks(result.landmarks, result.angles, result.exercise_type, result.stage || "unknown");
+            
+            if (showIdealForm && result.exercise_type && result.exercise_type !== "collecting_data" && result.exercise_type !== "unknown") {
+              showAngleComparison(result.angles, result.exercise_type, result.stage || "up");
+            }
+          }
+        })
+        .catch(err => {
+          pendingRequest = false;
+          console.error('Analysis error:', err);
+          statusText.textContent = err.message || "Analysis error. Please try again.";
+          feedbackMessages.innerHTML = `
+            <div class="feedback-item px-3 py-2 bg-red-500/70 rounded-lg">
+              ${err.message || 'Connection error'}
+            </div>`;
+          isAnalyzing = false;
+          startButton.disabled = false;
+          stopButton.disabled = true;
+        });
+      },100); // Reduced to improve performance
+    }
+
+    function drawAnglesAndLandmarks(landmarks, angles, exerciseType, stage) {
+      console.log('Landmarks received:', landmarks); // Log landmarks
+      poseCanvas.width = video.videoWidth;
+      poseCanvas.height = video.videoHeight;
+      poseCtx.clearRect(0, 0, poseCanvas.width, poseCanvas.height);
+
+      // Draw actual pose
+      drawFullSkeleton(landmarks, "#00ff00", 4);
+      
+      // Draw ideal reference pose if enabled and we have a recognized exercise
+      if (showIdealForm && exerciseType && 
+          exerciseType !== "collecting_data" && 
+          exerciseType !== "unknown" && 
+          idealLandmarks[exerciseType] && 
+          idealLandmarks[exerciseType][stage]) {
+        
+        const idealPose = idealLandmarks[exerciseType][stage];
+        drawIdealSkeleton(idealPose, "#00ccff", 3);
+      }
+
+      // Draw joint angles
+      drawAngles(landmarks, angles);
+    }
+    
+    function drawFullSkeleton(landmarks, color, lineWidth) {
+      const connections = [
+        ['LEFT_SHOULDER', 'RIGHT_SHOULDER'],
+        ['LEFT_SHOULDER', 'LEFT_ELBOW'],
+        ['LEFT_ELBOW', 'LEFT_WRIST'],
+        ['RIGHT_SHOULDER', 'RIGHT_ELBOW'],
+        ['RIGHT_ELBOW', 'RIGHT_WRIST'],
+        ['LEFT_SHOULDER', 'LEFT_HIP'],
+        ['RIGHT_SHOULDER', 'RIGHT_HIP'],
+        ['LEFT_HIP', 'RIGHT_HIP'],
+        ['LEFT_HIP', 'LEFT_KNEE'],
+        ['LEFT_KNEE', 'LEFT_ANKLE'],
+        ['RIGHT_HIP', 'RIGHT_KNEE'],
+        ['RIGHT_KNEE', 'RIGHT_ANKLE']
+      ];
+
+      const uniqueJoints = new Set();
+      connections.forEach(([start, end]) => {
+        uniqueJoints.add(start);
+        uniqueJoints.add(end);
+      });
+
+      poseCtx.beginPath();
+      poseCtx.strokeStyle = color;
+      poseCtx.lineWidth = lineWidth;
+      
+      connections.forEach(([start, end]) => {
+        if (!landmarks[start] || !landmarks[end]) return;
+        
+        poseCtx.moveTo(
+          (landmarks[start].x) * poseCanvas.width,
+          landmarks[start].y * poseCanvas.height
+        );
+        poseCtx.lineTo(
+          (landmarks[end].x) * poseCanvas.width,
+          landmarks[end].y * poseCanvas.height
+        );
+      });
+      poseCtx.stroke();
+
+      poseCtx.fillStyle = color;
+      Array.from(uniqueJoints).forEach(joint => {
+        if (!landmarks[joint]) return;
+        
+        poseCtx.beginPath();
+        poseCtx.arc(
+          (landmarks[joint].x) * poseCanvas.width,
+          landmarks[joint].y * poseCanvas.height,
+          5, 0, 2 * Math.PI
+        );
+        poseCtx.fill();
+      });
+    }
+
+    function drawIdealSkeleton(idealPose, color, lineWidth) {
+      const connections = [
+        ['LEFT_SHOULDER', 'RIGHT_SHOULDER'],
+        ['LEFT_SHOULDER', 'LEFT_ELBOW'],
+        ['LEFT_ELBOW', 'LEFT_WRIST'],
+        ['RIGHT_SHOULDER', 'RIGHT_ELBOW'],
+        ['RIGHT_ELBOW', 'RIGHT_WRIST'],
+        ['LEFT_SHOULDER', 'LEFT_HIP'],
+        ['RIGHT_SHOULDER', 'RIGHT_HIP'],
+        ['LEFT_HIP', 'RIGHT_HIP'],
+        ['LEFT_HIP', 'LEFT_KNEE'],
+        ['LEFT_KNEE', 'LEFT_ANKLE'],
+        ['RIGHT_HIP', 'RIGHT_KNEE'],
+        ['RIGHT_KNEE', 'RIGHT_ANKLE']
+      ];
+
+      const uniqueJoints = new Set();
+      connections.forEach(([start, end]) => {
+        uniqueJoints.add(start);
+        uniqueJoints.add(end);
+      });
+
+      poseCtx.beginPath();
+      poseCtx.strokeStyle = color;
+      poseCtx.lineWidth = lineWidth;
+      poseCtx.setLineDash([5, 5]);
+      
+      connections.forEach(([start, end]) => {
+        if (!idealPose[start] || !idealPose[end]) return;
+        
+        poseCtx.moveTo(
+          (idealPose[start].x) * poseCanvas.width,
+          idealPose[start].y * poseCanvas.height
+        );
+        poseCtx.lineTo(
+          (idealPose[end].x) * poseCanvas.width,
+          idealPose[end].y * poseCanvas.height
+        );
+      });
+      poseCtx.stroke();
+      poseCtx.setLineDash([]);
+
+      poseCtx.fillStyle = color;
+      Array.from(uniqueJoints).forEach(joint => {
+        if (!idealPose[joint]) return;
+        
+        poseCtx.beginPath();
+        poseCtx.arc(
+          (idealPose[joint].x) * poseCanvas.width,
+          idealPose[joint].y * poseCanvas.height,
+          5, 0, 2 * Math.PI
+        );
+        poseCtx.fill();
+      });
+    }
+    function drawAngles(landmarks, angles) {
+      const anglePoints = [
+        { joint: 'LEFT_ELBOW', angle: angles[0], offsetX: -15, offsetY: 0 },
+        { joint: 'RIGHT_ELBOW', angle: angles[1], offsetX: 15, offsetY: 0 },
+        { joint: 'LEFT_KNEE', angle: angles[2], offsetX: -15, offsetY: 15 },
+        { joint: 'RIGHT_KNEE', angle: angles[3], offsetX: 15, offsetY: 15 }
+      ];
+      
+      anglePoints.forEach(({ joint, angle, offsetX, offsetY }) => {
+        if (!landmarks[joint]) return;
+        
+        poseCtx.fillStyle = '#ffffff';
+        poseCtx.font = 'bold 16px Arial';
+        poseCtx.fillText(
+          `${angle.toFixed(0)}°`,
+          (landmarks[joint].x) * poseCanvas.width + offsetX,
+          landmarks[joint].y * poseCanvas.height + offsetY
+        );
+      });
+    }
+    
+    function showAngleComparison(actualAngles, exerciseType, stage) {
+      if (!idealAngles[exerciseType] || !idealAngles[exerciseType][stage]) {
+        angleComparison.classList.add("hidden");
+        return;
+      }
+      
+      angleComparison.classList.remove("hidden");
+      
+      const ideal = idealAngles[exerciseType][stage];
+      const angleKeys = ['LEFT_ELBOW', 'RIGHT_ELBOW', 'LEFT_KNEE', 'RIGHT_KNEE'];
+      const actualAnglesObj = {
+        LEFT_ELBOW: actualAngles[0],
+        RIGHT_ELBOW: actualAngles[1],
+        LEFT_KNEE: actualAngles[2],
+        RIGHT_KNEE: actualAngles[3]
+      };
+      
+      let comparisonHTML = '';
+      angleKeys.forEach((key, i) => {
+        if (ideal[key] !== undefined) {
+          const actualAngle = actualAnglesObj[key];
+          const idealAngle = ideal[key];
+          const diff = Math.abs(actualAngle - idealAngle);
+          
+          let diffClass = 'angle-diff-good';
+          if (diff > 20) {
+            diffClass = 'angle-diff-bad';
+          } else if (diff > 10) {
+            diffClass = 'angle-diff-warning';
+          }
+          
+          comparisonHTML += `
+            <div class="flex justify-between">
+              <span>${jointNameMapping[key] || key}:</span>
+              <span>
+                Current: <b>${actualAngle.toFixed(0)}°</b> | 
+                Ideal: <b>${idealAngle}°</b> | 
+                <span class="${diffClass}">Diff: ${diff.toFixed(0)}°</span>
+              </span>
+            </div>
+          `;
+        }
+      });
+      
+      angleComparisonContent.innerHTML = comparisonHTML;
+    }
+    
+    let lastFeedbackTime = 0;
+    const FEEDBACK_COOLDOWN = 1500; // 1.5 seconds
+
+    function onNewResult(result) {
+      // Handle exercise type change
+      if (result.exercise_type && result.exercise_type !== "collecting_data" && result.exercise_type !== lastExerciseType) {
+          lastExerciseType = result.exercise_type;
+          let exerciseDisplayName = "Unknown";
+          if (result.exercise_type === "push_up") exerciseDisplayName = "Push-ups";
+          else if (result.exercise_type === "squat") exerciseDisplayName = "Squats";
+          else if (result.exercise_type === "bicep_curl") exerciseDisplayName = "Bicep Curls";
+          else if (result.exercise_type === "shoulder_press") exerciseDisplayName = "Shoulder Press";
+          
+          exerciseType.textContent = exerciseDisplayName;
+          exerciseBadge.textContent = exerciseDisplayName;
+          exerciseBadge.classList.remove("hidden");
+          setTimeout(() => exerciseBadge.classList.add("hidden"), 3000);
+      }
+
+      // Handle form score
+      if (result.form_score !== undefined) {
+          const scorePercentage = Math.round(result.form_score * 100);
+          formScore.textContent = `${scorePercentage}%`;
+          formScoreMeter.style.width = `${scorePercentage}%`;
+          formScoreMeter.className = `form-score-meter h-full ${
+              scorePercentage >= 80 ? "bg-green-500" :
+              scorePercentage >= 60 ? "bg-yellow-500" : "bg-red-500"
+          } rounded-full`;
+      }
+
+      // Handle rep counter
+      if (result.counter !== undefined && result.counter !== lastCounter) {
+          lastCounter = result.counter;
+          repCounter.textContent = result.counter;
+          repCounter.classList.add("scale-125");
+          setTimeout(() => repCounter.classList.remove("scale-125"), 300);
+      }
+
+      // Handle feedback messages with stabilization
+      if (result.feedback?.length > 0) {
+          const now = Date.now();
+          if (now - lastFeedbackTime > FEEDBACK_COOLDOWN) {
+              const recentFeedback = result.feedback.slice(-3);
+              
+              // Fade out old messages
+              feedbackMessages.querySelectorAll('.feedback-item').forEach(item => {
+                  if (!recentFeedback.includes(item.textContent)) {
+                      item.style.opacity = '0';
+                      setTimeout(() => item.remove(), 500);
+                  }
+              });
+
+              // Add new messages
+              recentFeedback.forEach(message => {
+                  if (!Array.from(feedbackMessages.children).some(child => child.textContent === message)) {
+                      const messageElem = document.createElement('div');
+                      messageElem.className = this.getFeedbackClass(message);
+                      messageElem.textContent = message;
+                      feedbackMessages.appendChild(messageElem);
+                  }
+              });
+
+              lastFeedbackTime = now;
+          }
+      }
+    }
+
+    // Helper function for feedback styling
+    function getFeedbackClass(message) {
+        const lowerMsg = message.toLowerCase();
+        if (lowerMsg.includes('lower') || lowerMsg.includes('too high') || lowerMsg.includes('incorrect')) {
+            return "feedback-item px-3 py-2 bg-orange-500/70 rounded-lg";
+        }
+        if (lowerMsg.includes('good') || lowerMsg.includes('excellent') || lowerMsg.includes('perfect')) {
+            return "feedback-item px-3 py-2 bg-green-500/70 rounded-lg";
+        }
+        return "feedback-item px-3 py-2 bg-blue-500/70 rounded-lg";
+    }
+  
+
+    // Helper function to calculate angle between three points
+    function calculateAngle(a, b, c) {
+      // Convert to radians
+      const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+      let angle = Math.abs(radians * 180.0 / Math.PI);
+      
+      // Ensure angle is always the smaller one
+      if (angle > 180.0) {
+        angle = 360 - angle;
+      }
+      
+      return angle;
+    }
+
+    // Clean up resources when page is closed
+    window.addEventListener('beforeunload', () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      if (analysisInterval) {
+        clearInterval(analysisInterval);
+      }
+    });
+  </script>
+</body>
+</html>
